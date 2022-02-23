@@ -1,4 +1,4 @@
-from selenium.webdriver import Firefox, FirefoxProfile
+from selenium.webdriver import Firefox, FirefoxProfile, ActionChains
 from selenium.webdriver.common.by import By
 import time
 import random
@@ -28,26 +28,15 @@ class LevidiaWatcher(object):
         while len(self.watched_episodes) < self.total_episodes:
             episode_links = self.open_episodes_page()
             episode_link = self.select_episode_link(episode_links)
-
             self.click_link(episode_link)
-
             wootly_link = self.check_for_wootly_link()
             if wootly_link is not None:
                 wootly_link.click()
                 self.handle_video_player_popup()
-
-                self.driver.find_element(by=By.TAG_NAME, value="Iframe").click()
-                time.sleep(LevidiaWatcher.SLEEP_TIME)
-
-                video_window = self.driver.current_window_handle
-                self.close_all_other_windows(video_window)
-                time.sleep(LevidiaWatcher.SLEEP_TIME)
-
-                self.driver.switch_to.frame(self.driver.find_element(by=By.TAG_NAME, value="Iframe"))
-                time.sleep(LevidiaWatcher.SLEEP_TIME)
-
-                duration = self.driver.execute_script("return document.querySelector('video').duration")
-                time.sleep(duration)
+                self.play_video()
+                self.close_windows()
+                self.enter_fullscreen()
+                self.wait_until_end_of_episode()
             self.driver.quit()
 
     def open_episodes_page(self):
@@ -79,14 +68,15 @@ class LevidiaWatcher(object):
     def get_all_episodes_links(self):
         return self.driver.find_elements(by=By.CLASS_NAME, value="mlist.links")
 
-    def close_all_other_windows(self, except_window):
+    def close_windows(self):
+        video_window = self.driver.current_window_handle
         handles = list(self.driver.window_handles)
         for handle in handles:
-            if handle != except_window:
+            if handle != video_window:
                 self.driver.switch_to.window(handle)
                 self.driver.close()
         time.sleep(LevidiaWatcher.SLEEP_TIME)
-        self.driver.switch_to.window(except_window)
+        self.driver.switch_to.window(video_window)
 
     def select_episode_link(self, episode_links):
         random_link = episode_links[random.randint(0, len(episode_links) - 1)]
@@ -113,6 +103,23 @@ class LevidiaWatcher(object):
                 self.driver.close()
                 self.driver.switch_to.window(old_handle)
         time.sleep(LevidiaWatcher.SLEEP_TIME)
+
+    def play_video(self):
+        iframe = self.driver.find_element(by=By.TAG_NAME, value="Iframe")
+        iframe.click()
+        time.sleep(LevidiaWatcher.SLEEP_TIME)
+        return iframe
+
+    def enter_fullscreen(self):
+        iframe = self.driver.find_element(by=By.TAG_NAME, value="Iframe")
+        iframe.click()
+        iframe.click()
+        self.driver.switch_to.frame(iframe)
+        self.driver.execute_script("document.querySelector('video').requestFullscreen()")
+
+    def wait_until_end_of_episode(self):
+        duration = self.driver.execute_script("return document.querySelector('video').duration")
+        time.sleep(duration)
 
 
 if __name__ == "__main__":
