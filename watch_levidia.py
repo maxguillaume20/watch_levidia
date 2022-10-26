@@ -1,4 +1,8 @@
-from selenium.webdriver import Firefox, FirefoxProfile, ActionChains
+import keyboard
+
+
+from selenium import webdriver
+from selenium.webdriver import FirefoxOptions
 from selenium.webdriver.common.by import By
 import time
 import random
@@ -14,17 +18,18 @@ class LevidiaWatcher(object):
         self.driver = None              #type: Firefox
         self.watched_episodes = []
         self.total_episodes = 0
+        self.skip_episode = False
 
-    def execute(self):
+    def run(self):
         self.load()
-        self.run()
+        self.execute()
 
     def load(self):
         episode_links = self.open_episodes_page()
         self.total_episodes = len(episode_links)
         self.driver.quit()
 
-    def run(self):
+    def execute(self):
         while len(self.watched_episodes) < self.total_episodes:
             episode_links = self.open_episodes_page()
             episode_link = self.select_episode_link(episode_links)
@@ -40,7 +45,9 @@ class LevidiaWatcher(object):
             self.driver.quit()
 
     def open_episodes_page(self):
-        self.driver = Firefox(firefox_profile=FirefoxProfile())
+        opts = FirefoxOptions()
+
+        self.driver = webdriver.Firefox(options=opts)
         self.driver.get(tv_show_url)
         time.sleep(LevidiaWatcher.SLEEP_TIME)
         self.wait_for_bad_gateway()
@@ -106,7 +113,9 @@ class LevidiaWatcher(object):
 
     def play_video(self):
         iframe = self.driver.find_element(by=By.TAG_NAME, value="Iframe")
-        iframe.click()
+        self.driver.switch_to.frame(iframe)
+        prime = self.driver.find_element(by=By.CLASS_NAME, value="play-button")
+        prime.click()
         time.sleep(LevidiaWatcher.SLEEP_TIME)
         return iframe
 
@@ -118,10 +127,19 @@ class LevidiaWatcher(object):
         self.driver.execute_script("document.querySelector('video').requestFullscreen()")
 
     def wait_until_end_of_episode(self):
+        self.skip_episode = False
         duration = self.driver.execute_script("return document.querySelector('video').duration")
-        time.sleep(duration)
+        if duration is not None:
+            keyboard.add_hotkey("space", self.skip)
+            start_time = time.time()
+            while time.time() - start_time < duration and not self.skip_episode:
+                continue
+            keyboard.remove_all_hotkeys()
+
+    def skip(self):
+        self.skip_episode = True
 
 
 if __name__ == "__main__":
     watcher = LevidiaWatcher()
-    watcher.execute()
+    watcher.run()
